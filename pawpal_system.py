@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+import json
+from pathlib import Path
 from typing import Dict, List, Tuple
 
 
@@ -17,6 +19,7 @@ class Task:
     description: str
     time_minutes: int
     frequency: str = "daily"
+    priority: str = "medium"
     completed: bool = False
     time_of_day: str | None = None
     last_completed_on: date | None = None
@@ -36,6 +39,9 @@ class Task:
 
     def update_frequency(self, frequency: str) -> None:
         self.frequency = frequency
+
+    def update_priority(self, priority: str) -> None:
+        self.priority = priority
 
     def update_time_of_day(self, time_of_day: str | None) -> None:
         self.time_of_day = time_of_day
@@ -58,6 +64,7 @@ class Task:
             description=self.description,
             time_minutes=self.time_minutes,
             frequency=self.frequency,
+            priority=self.priority,
             completed=False,
             time_of_day=self.time_of_day,
             last_completed_on=None,
@@ -133,11 +140,76 @@ class Owner:
                 rows.append((pet.name, task))
         return rows
 
+    def save_to_json(self, file_path: str = "data.json") -> None:
+        """Persist the owner, pets, and tasks to a JSON file."""
+        data = {
+            "name": self.name,
+            "pets": [
+                {
+                    "name": pet.name,
+                    "species": pet.species,
+                    "age": pet.age,
+                    "tasks": [
+                        {
+                            "description": task.description,
+                            "time_minutes": task.time_minutes,
+                            "frequency": task.frequency,
+                            "priority": task.priority,
+                            "completed": task.completed,
+                            "time_of_day": task.time_of_day,
+                            "last_completed_on": (
+                                task.last_completed_on.isoformat()
+                                if task.last_completed_on is not None
+                                else None
+                            ),
+                        }
+                        for task in pet.tasks
+                    ],
+                }
+                for pet in self.pets
+            ],
+        }
+        Path(file_path).write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+    @classmethod
+    def load_from_json(cls, file_path: str = "data.json") -> Owner:
+        """Load owner, pets, and tasks from JSON if available."""
+        path = Path(file_path)
+        if not path.exists():
+            return cls(name="Jordan")
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        owner = cls(name=raw.get("name", "Jordan"))
+        for pet_data in raw.get("pets", []):
+            pet = Pet(
+                name=pet_data.get("name", "Unknown"),
+                species=pet_data.get("species", "other"),
+                age=pet_data.get("age", 0),
+            )
+            for task_data in pet_data.get("tasks", []):
+                last_completed_raw = task_data.get("last_completed_on")
+                last_completed = (
+                    date.fromisoformat(last_completed_raw) if last_completed_raw else None
+                )
+                task = Task(
+                    description=task_data.get("description", "Untitled task"),
+                    time_minutes=int(task_data.get("time_minutes", 0)),
+                    frequency=task_data.get("frequency", "daily"),
+                    priority=task_data.get("priority", "medium"),
+                    completed=bool(task_data.get("completed", False)),
+                    time_of_day=task_data.get("time_of_day"),
+                    last_completed_on=last_completed,
+                )
+                pet.add_task(task)
+            owner.add_pet(pet)
+        return owner
+
 
 class Scheduler:
     """The planning brain for organizing tasks across all pets."""
 
     _frequency_rank = {"daily": 0, "weekly": 1, "monthly": 2}
+    _priority_rank = {"high": 0, "medium": 1, "low": 2}
 
     def __init__(self, owner: Owner) -> None:
         self.owner = owner
@@ -146,12 +218,15 @@ class Scheduler:
         return self.owner.get_all_tasks(include_completed=include_completed)
 
     def organize_tasks(self, include_completed: bool = False) -> List[Task]:
+        """Sort by priority first, then by time and metadata."""
         tasks = self.retrieve_all_tasks(include_completed=include_completed)
         return sorted(
             tasks,
             key=lambda task: (
-                self._frequency_rank.get(task.frequency.lower(), 99),
+                self._priority_rank.get(task.priority.lower(), 99),
+                self._parse_time_to_minutes(task.time_of_day) or 24 * 60,
                 task.time_minutes,
+                self._frequency_rank.get(task.frequency.lower(), 99),
                 task.description.lower(),
             ),
         )
@@ -242,6 +317,40 @@ class Scheduler:
             warnings.append(f"{time_value}: {scope} have concurrent tasks -> {task_names}")
 
         return warnings
+
+    def next_available_slot(
+        self,
+        duration_minutes: int,
+        start_time: str = "06:00",
+        end_time: str = "22:00",
+        include_completed: bool = False,
+    ) -> str | None:
+        """Return the next free HH:MM slot that can fit the provided duration."""
+        day_start = self._parse_time_to_minutes(start_time)
+        day_end = self._parse_time_to_minutes(end_time)
+        if day_start is None or day_end is None or duration_minutes <= 0:
+            return None
+
+        timed_blocks: List[tuple[int, int]] = []
+        for task in self.retrieve_all_tasks(include_completed=include_completed):
+            start = self._parse_time_to_minutes(task.time_of_day)
+            if start is None:
+                continue
+            timed_blocks.append((start, start + task.time_minutes))
+        timed_blocks.sort(key=lambda block: block[0])
+
+        candidate = day_start
+        for block_start, block_end in timed_blocks:
+            if candidate + duration_minutes <= block_start:
+                return f"{candidate // 60:02d}:{candidate % 60:02d}"
+            if candidate < block_end:
+                candidate = block_end
+            if candidate + duration_minutes > day_end:
+                return None
+
+        if candidate + duration_minutes <= day_end:
+            return f"{candidate // 60:02d}:{candidate % 60:02d}"
+        return None
 
     def detect_conflicts(self, include_completed: bool = False) -> List[tuple[Task, Task]]:
         """Detect overlapping tasks using time_of_day and duration."""
