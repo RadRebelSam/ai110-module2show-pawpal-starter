@@ -50,3 +50,20 @@ Recent scheduler improvements include:
 - `filter_by()` to filter tasks by pet name and completion status.
 - Recurring task carry-forward: when a `daily` or `weekly` task is completed, the scheduler automatically creates a new pending instance for the next cycle.
 - Lightweight conflict warnings for tasks scheduled at the same exact time, including cases across different pets.
+
+## Testing PawPal+
+
+Run the test suite with:
+
+```bash
+python -m pytest
+```
+
+Current automated tests cover:
+
+- Chronological sorting of tasks by `HH:MM`.
+- Recurrence behavior, including creating a new pending daily task after completion.
+- Conflict detection for duplicate time slots.
+- Basic filtering, due-task checks, and empty-task edge cases.
+
+Confidence Level: `★★★★☆` (4/5) based on passing unit tests for key scheduling paths and edge cases.

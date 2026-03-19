@@ -83,3 +83,55 @@ def test_detects_conflicting_tasks() -> None:
     assert len(conflicts) == 1
     assert conflicts[0][0].description == "Task 1"
     assert conflicts[0][1].description == "Task 2"
+
+
+def test_complete_daily_task_creates_new_pending_occurrence() -> None:
+    owner = Owner(name="Alex")
+    pet = Pet(name="Milo", species="Dog")
+    pet.add_task(
+        Task(
+            description="Morning walk",
+            time_minutes=30,
+            frequency="daily",
+            time_of_day="07:30",
+        )
+    )
+    owner.add_pet(pet)
+    scheduler = Scheduler(owner)
+
+    completed = scheduler.complete_task(pet_name="Milo", task_description="Morning walk")
+
+    assert completed is True
+    matching_tasks = [task for task in pet.tasks if task.description == "Morning walk"]
+    assert len(matching_tasks) == 2
+    assert any(task.completed for task in matching_tasks)
+    assert any(not task.completed for task in matching_tasks)
+
+
+def test_detect_time_conflict_warnings_for_duplicate_times() -> None:
+    owner = Owner(name="Alex")
+    dog = Pet(name="Milo", species="Dog")
+    cat = Pet(name="Luna", species="Cat")
+    dog.add_task(Task(description="Walk", time_minutes=20, time_of_day="08:00"))
+    cat.add_task(Task(description="Feed", time_minutes=10, time_of_day="08:00"))
+    owner.add_pet(dog)
+    owner.add_pet(cat)
+    scheduler = Scheduler(owner)
+
+    warnings = scheduler.detect_time_conflict_warnings(include_completed=True)
+
+    assert len(warnings) == 1
+    assert "08:00" in warnings[0]
+    assert "multiple pets" in warnings[0]
+
+
+def test_empty_pet_has_no_tasks_in_sorted_output() -> None:
+    owner = Owner(name="Alex")
+    owner.add_pet(Pet(name="Milo", species="Dog"))
+    scheduler = Scheduler(owner)
+
+    tasks = scheduler.organize_tasks_by_time(include_completed=False)
+    warnings = scheduler.detect_time_conflict_warnings(include_completed=False)
+
+    assert tasks == []
+    assert warnings == []
