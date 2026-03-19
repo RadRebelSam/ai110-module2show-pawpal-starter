@@ -60,6 +60,8 @@ This structure helped me keep data modeling, scheduling logic, and UI coordinati
 - Describe one tradeoff your scheduler makes.
 - Why is that tradeoff reasonable for this scenario?
 
+My scheduler currently uses a lightweight conflict strategy that checks for exact `HH:MM` matches only, instead of checking full overlap windows based on each task's duration. This means it can quickly warn about obvious collisions without adding much complexity to the starter project, but it may miss partial overlaps (for example, a 07:30 task lasting 30 minutes and a 07:45 task). For this scenario, that tradeoff is reasonable because it keeps runtime logic simple, transparent, and easy to explain while still catching common same-time conflicts across one or multiple pets.
+
 ---
 
 ## 3. AI Collaboration
