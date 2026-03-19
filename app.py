@@ -91,6 +91,79 @@ if all_tasks_rows:
 else:
     st.info("No tasks yet. Add one above.")
 
+st.markdown("### Update Task Status")
+if owner.pets:
+    status_pet_name = st.selectbox(
+        "Choose pet for status update",
+        [pet.name for pet in owner.pets],
+        key="status_pet_name",
+    )
+    status_pet = owner.get_pet(status_pet_name)
+    status_options = [task.description for task in status_pet.tasks] if status_pet else []
+
+    if status_options:
+        status_task_name = st.selectbox(
+            "Choose task to update",
+            status_options,
+            key="status_task_name",
+        )
+        col_complete, col_incomplete = st.columns(2)
+        with col_complete:
+            if st.button("Mark complete", type="primary"):
+                updated = scheduler.complete_task(status_pet_name, status_task_name)
+                if updated:
+                    owner.save_to_json(DATA_FILE)
+                    st.success(f"Marked '{status_task_name}' as complete.")
+                    st.rerun()
+                else:
+                    st.warning("Task was not found. Try refreshing and selecting again.")
+        with col_incomplete:
+            if st.button("Mark incomplete"):
+                if status_pet is None:
+                    st.warning("Pet not found.")
+                else:
+                    target = None
+                    for task in status_pet.tasks:
+                        if task.description == status_task_name:
+                            target = task
+                            break
+                    if target is None:
+                        st.warning("Task was not found. Try refreshing and selecting again.")
+                    else:
+                        target.mark_incomplete()
+                        owner.save_to_json(DATA_FILE)
+                        st.success(f"Marked '{status_task_name}' as incomplete.")
+                        st.rerun()
+    else:
+        st.caption("This pet has no tasks to update.")
+else:
+    st.caption("Add a pet/task first, then update task status here.")
+
+st.markdown("### Delete a Task")
+if owner.pets:
+    delete_pet_name = st.selectbox(
+        "Choose pet", [pet.name for pet in owner.pets], key="delete_pet_name"
+    )
+    delete_pet = owner.get_pet(delete_pet_name)
+    delete_options = [task.description for task in delete_pet.tasks] if delete_pet else []
+
+    if delete_options:
+        delete_task_name = st.selectbox(
+            "Choose task to delete", delete_options, key="delete_task_name"
+        )
+        if st.button("Delete task", type="secondary"):
+            removed = delete_pet.remove_task(delete_task_name) if delete_pet else False
+            if removed:
+                owner.save_to_json(DATA_FILE)
+                st.success(f"Deleted '{delete_task_name}' from {delete_pet_name}.")
+                st.rerun()
+            else:
+                st.warning("Task was not found. Try refreshing and selecting again.")
+    else:
+        st.caption("This pet has no tasks to delete.")
+else:
+    st.caption("Add a pet/task first, then you can delete tasks here.")
+
 st.divider()
 
 st.subheader("Build Schedule")
