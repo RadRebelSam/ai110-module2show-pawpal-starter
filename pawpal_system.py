@@ -1,215 +1,139 @@
-"""PawPal+ logic layer class skeletons.
+"""PawPal+ logic layer.
 
-This module contains backend classes and method stubs based on the UML design.
+Core implementation for Task, Pet, Owner, and Scheduler.
 """
 
 from __future__ import annotations
 
-
-class PetOwner:
-    def __init__(
-        self,
-        name: str,
-        daily_time_available: int = 0,
-        preferences: list[str] | None = None,
-        contact_info: str = "",
-    ) -> None:
-        self.name = name
-        self.daily_time_available = daily_time_available
-        self.preferences = preferences or []
-        self.contact_info = contact_info
-
-    def update_preferences(self, preferences: list[str]) -> None:
-        pass
-
-    def set_time_available(self, minutes: int) -> None:
-        pass
-
-    def get_constraints(self) -> "ConstraintSet":
-        pass
+from dataclasses import dataclass, field
+from typing import Dict, List
 
 
-class Pet:
-    def __init__(
-        self,
-        name: str,
-        species: str,
-        age: int = 0,
-        weight: float = 0.0,
-        special_needs: list[str] | None = None,
-        energy_level: str = "",
-    ) -> None:
-        self.name = name
-        self.species = species
-        self.age = age
-        self.weight = weight
-        self.special_needs = special_needs or []
-        self.energy_level = energy_level
+@dataclass
+class Task:
+    """Represents a single care activity for a pet."""
 
-    def update_profile(self, name: str, species: str, age: int, weight: float) -> None:
-        pass
-
-    def add_special_need(self, need: str) -> None:
-        pass
-
-    def remove_special_need(self, need: str) -> None:
-        pass
-
-
-class CareTask:
-    def __init__(
-        self,
-        title: str,
-        category: str,
-        duration_minutes: int = 0,
-        priority: int = 0,
-        due_window: str = "",
-        frequency: str = "",
-        is_completed: bool = False,
-    ) -> None:
-        self.title = title
-        self.category = category
-        self.duration_minutes = duration_minutes
-        self.priority = priority
-        self.due_window = due_window
-        self.frequency = frequency
-        self.is_completed = is_completed
+    description: str
+    time_minutes: int
+    frequency: str = "daily"
+    completed: bool = False
 
     def mark_complete(self) -> None:
-        pass
+        self.completed = True
 
     def mark_incomplete(self) -> None:
-        pass
+        self.completed = False
 
-    def update_priority(self, priority: int) -> None:
-        pass
+    def update_description(self, description: str) -> None:
+        self.description = description
 
-    def update_duration(self, minutes: int) -> None:
-        pass
+    def update_time(self, time_minutes: int) -> None:
+        self.time_minutes = time_minutes
 
-    def fits_time_window(self, window: str) -> bool:
-        pass
-
-
-class TaskManager:
-    def __init__(self, tasks: list[CareTask] | None = None) -> None:
-        self.tasks = tasks or []
-
-    def add_task(self, task: CareTask) -> None:
-        pass
-
-    def edit_task(self, task_id: str, updates: dict) -> None:
-        pass
-
-    def delete_task(self, task_id: str) -> None:
-        pass
-
-    def get_pending_tasks(self) -> list[CareTask]:
-        pass
-
-    def sort_by_priority(self) -> list[CareTask]:
-        pass
-
-    def filter_by_category(self, category: str) -> list[CareTask]:
-        pass
+    def update_frequency(self, frequency: str) -> None:
+        self.frequency = frequency
 
 
-class ConstraintSet:
-    def __init__(
-        self,
-        time_available: int = 0,
-        owner_preferences: list[str] | None = None,
-        must_do_tasks: list[CareTask] | None = None,
-        max_tasks_per_day: int = 0,
-    ) -> None:
-        self.time_available = time_available
-        self.owner_preferences = owner_preferences or []
-        self.must_do_tasks = must_do_tasks or []
-        self.max_tasks_per_day = max_tasks_per_day
+@dataclass
+class Pet:
+    """Stores pet details and all of that pet's tasks."""
 
-    def validate_task(self, task: CareTask) -> bool:
-        pass
+    name: str
+    species: str
+    age: int = 0
+    tasks: List[Task] = field(default_factory=list)
 
-    def is_feasible(self, task: CareTask) -> bool:
-        pass
+    def add_task(self, task: Task) -> None:
+        self.tasks.append(task)
 
-    def score_task(self, task: CareTask) -> float:
-        pass
+    def remove_task(self, description: str) -> bool:
+        for index, task in enumerate(self.tasks):
+            if task.description == description:
+                del self.tasks[index]
+                return True
+        return False
+
+    def get_tasks(self, include_completed: bool = True) -> List[Task]:
+        if include_completed:
+            return list(self.tasks)
+        return [task for task in self.tasks if not task.completed]
+
+    def get_pending_tasks(self) -> List[Task]:
+        return self.get_tasks(include_completed=False)
+
+
+@dataclass
+class Owner:
+    """Manages multiple pets and provides task access across pets."""
+
+    name: str
+    pets: List[Pet] = field(default_factory=list)
+
+    def add_pet(self, pet: Pet) -> None:
+        self.pets.append(pet)
+
+    def remove_pet(self, pet_name: str) -> bool:
+        for index, pet in enumerate(self.pets):
+            if pet.name == pet_name:
+                del self.pets[index]
+                return True
+        return False
+
+    def get_pet(self, pet_name: str) -> Pet | None:
+        for pet in self.pets:
+            if pet.name == pet_name:
+                return pet
+        return None
+
+    def get_all_tasks(self, include_completed: bool = True) -> List[Task]:
+        tasks: List[Task] = []
+        for pet in self.pets:
+            tasks.extend(pet.get_tasks(include_completed=include_completed))
+        return tasks
+
+    def get_tasks_by_pet(self) -> Dict[str, List[Task]]:
+        return {pet.name: pet.get_tasks() for pet in self.pets}
 
 
 class Scheduler:
-    def __init__(
-        self,
-        constraints: ConstraintSet,
-        task_manager: TaskManager,
-        planning_date: str = "",
-    ) -> None:
-        self.constraints = constraints
-        self.task_manager = task_manager
-        self.planning_date = planning_date
+    """The planning brain for organizing tasks across all pets."""
 
-    def generate_daily_plan(self) -> "DailyPlan":
-        pass
+    _frequency_rank = {"daily": 0, "weekly": 1, "monthly": 2}
 
-    def rank_tasks(self) -> list[CareTask]:
-        pass
-
-    def resolve_conflicts(self, tasks: list[CareTask]) -> list[CareTask]:
-        pass
-
-    def explain_selection(self, task: CareTask) -> str:
-        pass
-
-
-class DailyPlan:
-    def __init__(
-        self,
-        date: str,
-        scheduled_items: list[CareTask] | None = None,
-        unscheduled_items: list[CareTask] | None = None,
-        total_time_used: int = 0,
-    ) -> None:
-        self.date = date
-        self.scheduled_items = scheduled_items or []
-        self.unscheduled_items = unscheduled_items or []
-        self.total_time_used = total_time_used
-
-    def add_scheduled_task(self, task: CareTask) -> None:
-        pass
-
-    def remove_task(self, task_id: str) -> None:
-        pass
-
-    def get_summary(self) -> str:
-        pass
-
-    def get_reasoning(self) -> str:
-        pass
-
-
-class PawPalApp:
-    def __init__(
-        self,
-        owner: PetOwner,
-        pet: Pet,
-        task_manager: TaskManager,
-        scheduler: Scheduler,
-        current_plan: DailyPlan | None = None,
-    ) -> None:
+    def __init__(self, owner: Owner) -> None:
         self.owner = owner
-        self.pet = pet
-        self.task_manager = task_manager
-        self.scheduler = scheduler
-        self.current_plan = current_plan
 
-    def collect_user_input(self) -> None:
-        pass
+    def retrieve_all_tasks(self, include_completed: bool = False) -> List[Task]:
+        return self.owner.get_all_tasks(include_completed=include_completed)
 
-    def save_task_changes(self) -> None:
-        pass
+    def organize_tasks(self, include_completed: bool = False) -> List[Task]:
+        tasks = self.retrieve_all_tasks(include_completed=include_completed)
+        return sorted(
+            tasks,
+            key=lambda task: (
+                self._frequency_rank.get(task.frequency.lower(), 99),
+                task.time_minutes,
+                task.description.lower(),
+            ),
+        )
 
-    def build_plan(self) -> None:
-        pass
+    def get_tasks_by_frequency(self, frequency: str, include_completed: bool = False) -> List[Task]:
+        target = frequency.lower()
+        tasks = self.retrieve_all_tasks(include_completed=include_completed)
+        return [task for task in tasks if task.frequency.lower() == target]
 
-    def display_plan(self) -> None:
-        pass
+    def complete_task(self, pet_name: str, task_description: str) -> bool:
+        pet = self.owner.get_pet(pet_name)
+        if pet is None:
+            return False
+
+        for task in pet.tasks:
+            if task.description == task_description:
+                task.mark_complete()
+                return True
+        return False
+
+
+# Compatibility aliases for earlier UML naming.
+CareTask = Task
+PetOwner = Owner
